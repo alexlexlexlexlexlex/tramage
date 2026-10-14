@@ -1,0 +1,5 @@
+venv/
+venv-mac/
+build/
+dist/
+__pycache__/

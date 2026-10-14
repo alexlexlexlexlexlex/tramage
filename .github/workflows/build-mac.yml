@@ -1,0 +1,47 @@
+# Construit Tramage.app sur les Mac de GitHub, pour Apple Silicon et pour
+# Intel. Les .zip sont dans l'onglet Actions, section Artifacts de chaque run.
+name: Build macOS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest      # Apple Silicon (M1, M2, M3…)
+            label: AppleSilicon
+          - runner: macos-15-intel    # Mac Intel
+            label: Intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build
+        run: PYTHON=python ./build_mac.sh
+
+      # Lance l'appli avec une image en argument et attend le PNG tramé :
+      # vérifie que Tk, tkdnd et Pillow sont bien embarqués.
+      - name: Smoke test
+        run: |
+          ./venv-mac/bin/python -c "from PIL import Image; Image.new('RGB', (1200, 900), (120, 80, 40)).save('smoke.jpg')"
+          ./dist/Tramage.app/Contents/MacOS/Tramage "$PWD/smoke.jpg" &
+          pid=$!
+          for i in $(seq 60); do [ -f smoke_6tons.png ] && break; sleep 1; done
+          kill $pid || true
+          test -f smoke_6tons.png
+
+      - name: Zip
+        run: ditto -c -k --keepParent dist/Tramage.app Tramage-mac-${{ matrix.label }}.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tramage-mac-${{ matrix.label }}
+          path: Tramage-mac-${{ matrix.label }}.zip
